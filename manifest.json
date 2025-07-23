@@ -6,7 +6,7 @@
     "permissions": [
         "tabs",
         "storage",
-        "contextMenus",
+        "activeTab",
         "scripting"
     ],
     "background": {
@@ -27,15 +27,5 @@
         "48": "images/icons/icon48.png",
         "128": "images/icons/icon128.png"
     },
-    "content_scripts": [
-        {
-            "matches": [
-                "<all_urls>"
-            ],
-            "js": [
-                "content.js"
-            ]
-        }
-    ],
     "options_page": "options.html"
 }
