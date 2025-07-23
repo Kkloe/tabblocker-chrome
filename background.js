@@ -1,4 +1,4 @@
-const DEBUG_MODE = false;
+const DEBUG_MODE = true;
 let closedTabCounter = {};
 
 /**
@@ -49,8 +49,7 @@ chrome.tabs.onCreated.addListener((newTab) => {
         }
         logDebug("Opener tab for new tab:", openerTab);
         // Check if the new tab is a manual new tab, CTRL+T or the plus sign for new tab
-        if (newTab.pendingUrl === "chrome://newtab/" && newTab.url === "")
-        {
+        if (isChromeScheme(newTab.pendingUrl) && newTab.url === "") {
             logDebug("This tab is likely a manual new tab — skipping tab block logic.");
             return;
         }
@@ -114,9 +113,25 @@ function setTabIcon(tabId, isFrozen) {
     chrome.action.setIcon({ path: iconPath, tabId });
 }
 
+/**
+ * Function to check if the URL is a Chrome scheme.
+ * 
+ * @param {*} url 
+ * @returns boolean
+ */
+function isChromeScheme(url) {
+    logDebug("Checking if URL is a Chrome scheme:", url);
+    return /^chrome[^:]*:\/\//.test(url);
+}
 
+
+/**
+ * For debugging purposes, log messages to the console if DEBUG_MODE is true.
+ * 
+ * @param  {...any} args 
+ */
 function logDebug(...args) {
-  if (DEBUG_MODE) {
-    console.log(...args);
-  }
+    if (DEBUG_MODE) {
+        console.log(...args);
+    }
 }
