@@ -1,24 +1,38 @@
-document.getElementById('reset').onclick = () => {
-    chrome.storage.local.clear();
-    alert('All blocked domains deleted!');
-};
+function loadDomains() {
+  chrome.storage.local.get('tabBlockerFrozenDomains', (data) => {
+    const domains = data.tabBlockerFrozenDomains || {};
+    const list = document.getElementById('domainList');
+    list.innerHTML = '';
 
-const listEl = document.getElementById('list');
+    Object.keys(domains).forEach((domain) => {
+      const li = document.createElement('li');
+      li.textContent = domain;
 
-chrome.storage.local.get('tabBlockerDomains', (data) => {
-    const domains = data.tabBlockerDomains || {};
-    const domainKeys = Object.keys(domains);
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove';
+      removeBtn.onclick = () => removeDomain(domain);
 
-    if (domainKeys.length === 0) {
-        const emptyMsg = document.createElement('li');
-        emptyMsg.textContent = 'There are no blocked domains';
-        emptyMsg.style.fontStyle = 'italic';
-        listEl.appendChild(emptyMsg);
-    } else {
-        domainKeys.forEach(domain => {
-            const item = document.createElement('li');
-            item.textContent = domain;
-            listEl.appendChild(item);
-        });
-    }
+      li.appendChild(removeBtn);
+      list.appendChild(li);
+    });
+  });
+}
+
+function removeDomain(domain) {
+  chrome.storage.local.get('tabBlockerFrozenDomains', (data) => {
+    const domains = data.tabBlockerFrozenDomains || {};
+    delete domains[domain];
+
+    chrome.storage.local.set({ tabBlockerFrozenDomains: domains }, () => {
+      loadDomains(); // Refresh the list
+    });
+  });
+}
+
+document.getElementById('removeAll').addEventListener('click', () => {
+  chrome.storage.local.set({ tabBlockerFrozenDomains: {} }, () => {
+    loadDomains();
+  });
 });
+
+document.addEventListener('DOMContentLoaded', loadDomains);
