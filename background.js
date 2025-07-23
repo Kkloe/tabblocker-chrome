@@ -117,6 +117,6 @@ function setTabIcon(tabId, isFrozen) {
 
 function logDebug(...args) {
   if (DEBUG_MODE) {
-    logDebug(...args);
+    console.log(...args);
   }
 }
