@@ -1,6 +1,6 @@
 # 🔒 Tab Blocker (Chrome-Compatible Rebuild)
 
-Tab Freezer is a browser extension that automatically closes new tabs opened in blacklisted domains — helping you avoid intrusive popups, redirect spam, and unwanted tab behavior.
+Tab Blocker is a browser extension that automatically closes new tabs opened in blacklisted domains — helping you avoid intrusive popups, redirect spam, and unwanted tab behavior.
 
 This project is to copy the functionality of the original [Tab Freezer](https://github.com/lynk/webext-tabfreezer), which is no longer allowed on the Chrome Web Store due to policy changes and limitations with tab management APIs.
 
