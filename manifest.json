@@ -2,12 +2,13 @@
     "manifest_version": 3,
     "name": "Tab Blocker",
     "description": "Blocks unwanted new tabs from selected domains.",
-    "version": "1.0",
+    "version": "2.0",
     "permissions": [
         "tabs",
         "storage",
         "activeTab",
-        "scripting"
+        "scripting",
+        "contextMenus"
     ],
     "background": {
         "service_worker": "background.js"
