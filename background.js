@@ -237,8 +237,10 @@ function getTabBlockerFrozenDomains() {
 function setTabIcon(tabId, isFrozen) {
     logDebug(`Setting icon for tab ${tabId} to ${isFrozen ? 'on' : 'off'}`);
     const iconPath = isFrozen ? 'images/icons/icon128frozen.png' : 'images/icons/icon128.png';
-
     chrome.action.setIcon({ path: iconPath, tabId });
+
+    const title = isFrozen ? "TURN OFF Freezing" : "TURN ON Freezing";
+    chrome.action.setTitle({ tabId, title });
 }
 
 /**
