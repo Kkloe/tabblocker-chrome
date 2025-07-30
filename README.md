@@ -14,6 +14,6 @@ This project is to copy the functionality of the original [Tab Freezer](https://
 - ✅ Options page to view and manage chosen domains (individually or all at once)
 
 🤖 AI-Assisted Development
-This project was built with support from Microsoft Copilot, an AI companion that provided development guidance, refactored code, helped adapt the extension for Manifest V3, and crafted documentation and images.
+This project was built with support from Microsoft Copilot and Google Gemini, AI companions that provided development guidance, refactored code, helped adapt the extension for Manifest V3, and crafted documentation and images.
 
 Special thanks for making the process smoother, smarter, and occasionally more entertaining.
