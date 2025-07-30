@@ -1,4 +1,4 @@
-const DEBUG_MODE = false; // Set to true for debugging
+const DEBUG_MODE = true; // Set to true for debugging
 let closedTabCounter = {};
 
 /**
@@ -10,20 +10,23 @@ let closedTabCounter = {};
  */
 chrome.runtime.onInstalled.addListener(() => {
     logDebug("Extension installed or updated");
-    createContextMenu();
+    createContextMenu(); // The callback in createContextMenu will now call updateTabBlockerContextMenu
 });
 
 /**
- * When a tab is updated, check if it is reloaded and update the context menu visibility.
- * Also, handle the icon click to toggle the frozen state of the domain.
+ * When a tab is updated, check if it is reloaded and update the tab icon.
  */
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    // Logic for context menu visibility
     if (changeInfo.status === "complete") {
+        if (!tab || !tab.url) {
+            logDebug("No valid tab found for tabId in onUpdated:", tabId);
+            return;
+        }
         getTabBlockerFrozenDomains().then((domains) => {
             logDebug("Tab updated: ", tab);
             const isFrozen = isTabFrozen(tab, domains);
-            handleTab(tab, domains?.[new URL(tab.url).hostname]);
+            // Handle the tab icon based on the frozen state
+            handleTabIcon(tab, isFrozen);
         });
     }
 });
@@ -42,7 +45,7 @@ chrome.tabs.onCreated.addListener((newTab) => {
     handleNewTab(newTab);
 });
 
-/**a
+/**
  * When the context menu item is clicked it should open the link in a new tab
  * even if the domain is frozen.
  */
@@ -50,7 +53,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === "tabBlockerForceOpenLink" && info.linkUrl && tab?.index !== undefined) {
         chrome.tabs.create({
             url: info.linkUrl,
-            index: tab.index + 1  // Place it right after the current tab
+            index: tab.index + 1 // Place it right after the current tab
         });
         logDebug("Opened link in new tab next to current:", info.linkUrl);
     }
@@ -58,23 +61,22 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 
 /**
- * When a tab is activated, selected, or switched, update the context menu visibility.
+ * When a tab is activated, selected, or switched, update the tab icon.
+ * Context menu visibility is now handled globally by documentUrlPatterns.
  */
 chrome.tabs.onActivated.addListener(({ tabId }) => {
     getTabBlockerFrozenDomains().then((domains) => {
         chrome.tabs.get(tabId, (tab) => {
             if (!tab || !tab.url) {
-                logDebug("No valid tab found for tabId:", tabId);
+                logDebug("No valid tab found for tabId in onActivated:", tabId);
                 return;
             }
             logDebug("Tab activated:", tab);
-            // Check if the tab's domain is frozen
             const isFrozen = isTabFrozen(tab, domains);
-            handleTab(tab, isFrozen);
+            handleTabIcon(tab, isFrozen);
         });
     });
 });
-
 
 
 /**
@@ -90,39 +92,59 @@ function createContextMenu() {
     chrome.contextMenus.create({
         id: "tabBlockerForceOpenLink",
         title: "Open new tab (override freeze)",
-        contexts: ["link"],
-        visible: false
+        contexts: ["link"]
+    }, () => {
+        if (chrome.runtime.lastError) {
+            console.error("Error creating context menu:", chrome.runtime.lastError);
+        } else {
+            // Immediately update the context menu patterns after creation
+            updateTabBlockerContextMenu();
+        }
     });
 }
 
 /**
- * Update the context menu visibility based on whether this current tab's domain is frozen.
+ * Update the context menu's visibility and document URL patterns
+ * based on the currently frozen domains. This ensures the menu item
+ * only appears on links within frozen domains.
  */
-function updateContextMenuForTab(tab, isFrozen) {
-    logDebug("Updating context menu for tab: ", tab, "with state: ", isFrozen);
-    let domain = null;
-    try {
-        domain = new URL(tab.url || tab.pendingUrl || "").hostname;
-    } catch (err) {
-        logDebug("Invalid URL detected:", err);
-        domain = null;
-    }
+function updateTabBlockerContextMenu() {
+    logDebug("Updating context menu with documentUrlPatterns.");
+    getTabBlockerFrozenDomains().then((domains) => {
+        let hostPatterns = [];
+        for (const domain in domains) {
+            if (domains[domain] === true) {
+                // Construct the pattern to match the exact hostname
+                hostPatterns.push(`*://${domain}/*`);
+            }
+        }
 
-    if (!domain) {
-        chrome.contextMenus.update("tabBlockerForceOpenLink", { visible: false });
-        return;
-    }
+        // The context menu should only be overall visible if there are
+        // actually domains frozen. If not, it won't show anywhere.
+        let menuOverallVisible = hostPatterns.length > 0;
 
-    // Update the context menu visibility based on the frozen state of the domain
-    chrome.contextMenus.update("tabBlockerForceOpenLink", { visible: !!isFrozen });
+        chrome.contextMenus.update(
+            "tabBlockerForceOpenLink", // The ID of your context menu item
+            {
+                documentUrlPatterns: hostPatterns,
+                visible: menuOverallVisible // Set overall visibility
+            },
+            () => {
+                if (chrome.runtime.lastError) {
+                    console.error("Error updating context menu patterns:", chrome.runtime.lastError);
+                } else {
+                    logDebug("Context menu patterns updated:", hostPatterns, "Overall Visibility:", menuOverallVisible);
+                }
+            }
+        );
+    });
 }
-
 
 /**
  * ICON LOGIC
  * This section handles the logic when the extension icon is clicked
  * or when a tab is updated.
-*/
+ */
 
 /**
  * When the extension icon is clicked, toggle the current domain in the list of frozen domains.
@@ -134,23 +156,25 @@ function handleIconClick(tab) {
 
     getTabBlockerFrozenDomains().then((domains) => {
         logDebug("domains", domains);
-        // check if the current domain is already in the list
         const isFrozen = isTabFrozen(tab, domains);
         logDebug("isFrozen", isFrozen);
+
         if (isFrozen) {
-            // if listed remove it from the list
             logDebug("removing domain from the list");
             delete domains[domain];
         } else {
-            // if not listed add it to the list
             logDebug("adding domain to the list");
             domains[domain] = true;
         }
-        // handle the tab icon and context menu update
-        handleTab(tab, !isFrozen);
-        // save the the current domain to the list of frozen domains
+
+        // handle the tab icon based on the new state
+        handleTabIcon(tab, !isFrozen);
+
+        // save the current domain to the list of frozen domains
         chrome.storage.local.set({ tabBlockerFrozenDomains: domains }, () => {
             logDebug("updated domains", domains);
+            // Update the context menu to reflect the new frozen domains
+            updateTabBlockerContextMenu();
         });
     });
 }
@@ -172,7 +196,8 @@ function handleNewTab(newTab) {
     }
     chrome.tabs.get(newTab.openerTabId, (openerTab) => {
         // If the opener tab is not found or is invalid, skip the logic
-        if (!openerTab) {
+        if (!openerTab || !openerTab.url) {
+            logDebug("Opener tab not found or invalid URL:", openerTab);
             return;
         }
         logDebug("Opener tab for new tab:", openerTab);
@@ -193,7 +218,8 @@ function handleNewTab(newTab) {
                 logDebug("New tab blocked for domain:", domain);
             } else {
                 logDebug("New tab not blocked for domain:", domain);
-                handleTab(newTab, isFrozen);
+                // Only handle the icon for the new tab if it's not blocked
+                handleTabIcon(newTab, isFrozen);
             }
         });
     });
@@ -204,37 +230,44 @@ function handleNewTab(newTab) {
  */
 
 /**
- * Handle the tab based on its frozen state.
- * 
- * @param {*} tab 
- * @param {*} isFrozen 
+ * Handle the tab's icon based on its frozen state.
+ * This function now *only* handles the icon.
+ *
+ * @param {Object} tab
+ * @param {boolean} isFrozen
  */
-function handleTab(tab, isFrozen) {
-    logDebug("Handling tab: ", tab, "Is frozen: ", isFrozen);
-    // Set the icon based on the frozen state
+function handleTabIcon(tab, isFrozen) {
+    logDebug("Handling tab icon for tab: ", tab, "Is frozen: ", isFrozen);
     setTabIcon(tab.id, isFrozen);
-    // Update the context menu for the tab
-    updateContextMenuForTab(tab, isFrozen);
 }
 
 /**
  * Check if the tab's domain is frozen.
  * @param {Object} tab - The tab object to check.
  * @param {Object} domains - The object containing frozen domains.
- * 
+ *
  * @return {boolean} - Returns true if the tab's domain is frozen, false otherwise.
  */
 function isTabFrozen(tab, domains) {
-    logDebug("Checking if tab is frozen:", tab);
-
-    const domain = new URL(tab.url).hostname;
-    const isFrozen = domains?.[domain];
-    return isFrozen || false;
+    // Ensure tab.url exists before creating a URL object
+    if (!tab || !tab.url) {
+        logDebug("Invalid tab or URL provided to isTabFrozen:", tab);
+        return false;
+    }
+    try {
+        const domain = new URL(tab.url).hostname;
+        const isFrozen = domains?.[domain];
+        return isFrozen || false;
+    } catch (e) {
+        logDebug("Error getting hostname from tab URL in isTabFrozen:", tab.url, e);
+        return false;
+    }
 }
+
 
 /**
  * Get the list of frozen domains from storage.
- * 
+ *
  * @returns {Promise<Object>} A promise that resolves to the frozen domains object.
  */
 function getTabBlockerFrozenDomains() {
@@ -247,9 +280,9 @@ function getTabBlockerFrozenDomains() {
 
 /**
  * Set the icon for the tab based on whether it is frozen or not.
- * 
- * @param {number} tabId 
- * @param {boolean} isFrozen 
+ *
+ * @param {number} tabId
+ * @param {boolean} isFrozen
  */
 function setTabIcon(tabId, isFrozen) {
     logDebug(`Setting icon for tab ${tabId} to ${isFrozen ? 'on' : 'off'}`);
@@ -262,8 +295,8 @@ function setTabIcon(tabId, isFrozen) {
 
 /**
  * Function to check if the URL is a Chrome scheme.
- * 
- * @param {*} url 
+ *
+ * @param {*} url
  * @returns boolean
  */
 function isChromeScheme(url) {
@@ -273,8 +306,8 @@ function isChromeScheme(url) {
 
 /**
  * For debugging purposes, log messages to the console if DEBUG_MODE is true.
- * 
- * @param  {...any} args 
+ *
+ * @param  {...any} args
  */
 function logDebug(...args) {
     if (DEBUG_MODE) {
